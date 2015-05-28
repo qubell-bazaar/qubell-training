@@ -1,0 +1,12 @@
+application:
+  configuration:
+    configuration.url: "https://s3.amazonaws.com/qubell-starter-kit-artifacts/qubell-bazaar/component-mysql-dev-cookbooks-stable-599d152.tar.gz"
+  interfaces:
+    cookbook:
+      mysql-cookbook-url: bind(cookbook#connection.url)
+      latency: bind(cookbook#connection.latency)
+    configuration:
+      url: bind(cookbook#configuration.url)
+  components:
+    cookbook:
+      type: cobalt.common.HttpEndpoint
