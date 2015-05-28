@@ -1,0 +1,39 @@
+application:
+  interfaces:
+    input:
+      "*": bind(workflow#input.*)
+    output:
+      message: bind(workflow#result.message)
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        input:
+          ip: configuration(string)
+        result:
+          message: publish-signal(map<string, string>)
+      configuration:
+        input.ip: 127.0.0.1
+        configuration.workflows:
+          launch:
+            steps:
+              - provision:
+                  action: provisionVms
+                  parameters:
+                    staticIps: ["{$.ip}"]
+                    vmIdentity: ec2-user
+                    roleName: default
+              - shellScript:
+                  action: execrun
+                  precedingPhases: [ provision ]
+                  parameters:
+                    roles: [ default ]
+                    command: 
+                      - |
+                        hostname
+                        echo 'hello world'
+                  output:
+                    hello: stdout
+            return:
+              message:
+                value: "{$.hello}"

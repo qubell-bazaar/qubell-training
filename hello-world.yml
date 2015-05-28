@@ -1,0 +1,32 @@
+application:
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        result:
+          message: publish-signal(map<string, string>)
+      configuration:
+        configuration.workflows:
+          launch:
+            steps:
+              - provision:
+                  action: provisionVms
+                  parameters:
+                    hardwareId: "m1.medium"
+                    imageId: "us-east-1/ami-1ba18d72"
+                    vmIdentity: ec2-user
+                    roleName: default
+              - shellScript:
+                  action: execrun
+                  precedingPhases: [ provision ]
+                  parameters:
+                    roles: [ default ]
+                    command: 
+                      - |
+                        hostname
+                        echo 'hello world'
+                  output:
+                    hello: stdout
+            return:
+              message:
+                value: "{$.hello}"
