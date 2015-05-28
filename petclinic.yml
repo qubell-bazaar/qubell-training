@@ -1,0 +1,196 @@
+application:
+  configuration:
+    input.artifact-url: "http://qubell-starter-kit-artifacts.s3.amazonaws.com/petclinic/petclinic-1.0.0-master.war"
+
+  bindings:
+    - [main, Database]
+    - [main, AppServer]
+    - [main, LoadBalancer]
+
+  interfaces:
+    input:
+      artifact-url: "bind(main#input.artifact-url)"
+    endpoints:
+      lb: "bind(LoadBalancer#haproxy.lb-stats)"
+      app: "bind(AppServer#tomcat.app-hosts)"
+      db: "bind(Database#mysql.dbms)"
+      entry: "bind(main#result.entry-url)"
+
+  components:
+    main:
+      type: workflow.Instance
+      interfaces:
+        input:
+          artifact-url:
+            type: configuration(string)
+            name: Artifact URL
+          #as constants
+          db-sql-url:
+              type: configuration(list<string>)
+          db-user:
+              type: configuration(string)
+          db-password:
+              type: configuration(string)
+          privileges:
+              type: configuration(list<string>)
+          lib-uri:
+              type: configuration(list<string>)
+        mysql:
+          dbms:
+              type: consume-signal(object)
+          schema:
+              type: send-command(string db-user, string db-user-password, list<string> db-user-privileges => object connection)
+          file-query:
+              type: send-command(object connection, list<string> sql-url)
+        tomcat:
+          deploy-libs:
+              type: send-command(list<string> lib-uri)
+          deploy-war:
+              type: send-command(string uri, string path, object context-attrs, object context-nodes)
+          app-hosts:
+              type: consume-signal(list<string>)
+          app-port:
+              type: consume-signal(int)
+        haproxy:
+          reconfigure-servers:
+              type: send-command(list<string> app-hosts, int app-port, string lb-bucket => string entry-url)
+        result:
+          entry-url:
+              type: publish-signal(string)
+              name: PetClinic
+
+      required: [mysql, tomcat, haproxy]
+      configuration:
+        input.db-sql-url: ["https://raw.github.com/qubell-bazaar/component-petclinic/master/sql/petclinic-mysql-schema.sql", "https://raw.github.com/qubell-bazaar/component-petclinic/master/sql/petclinic-mysql-dataload.sql"]
+        input.db-user: petclinic #const
+        input.db-password: petclinic #const
+        input.privileges: ["all"] #const
+        input.lib-uri:
+          - "http://repo1.maven.org/maven2/org/apache/tomcat/dbcp/6.0.26/dbcp-6.0.26.jar"
+          - "http://repo1.maven.org/maven2/mysql/mysql-connector-java/5.1.6/mysql-connector-java-5.1.6.jar"
+
+        configuration.triggers:
+          input.artifact-url: update
+          tomcat.app-hosts: update
+
+        configuration.propagateStatus: [ update ]
+
+        configuration.workflows:
+          launch: &launch
+            steps:
+              - getSignals:
+                  action: getSignals
+                  output:
+                    props: result
+              - createSchema:
+                  action: mysql.schema
+                  precedingPhases: [ getSignals ]
+                  parameters:
+                    commandCallTimeout: 5 minutes
+                    db-user: "{$.db-user}"
+                    db-user-password: "{$.db-password}"
+                    db-user-privileges: "{$.privileges}"
+                  output:
+                    con: connection
+              - uploadSql:
+                  action: mysql.file-query
+                  phase: prepare
+                  precedingPhases: [ createSchema ]
+                  parameters:
+                    commandCallTimeout: 5 minutes
+                    connection: "{$.con}"
+                    sql-url: "{$.db-sql-url}"
+              - deployLibs:
+                  action: tomcat.deploy-libs
+                  precedingPhases: [ getSignals ]
+                  parameters:
+                    commandCallTimeout: 5 minutes
+                    lib-uri: "{$.lib-uri}"
+              - deployWar:
+                  action: tomcat.deploy-war
+                  precedingPhases: [ prepare, deployLibs ]
+                  parameters:
+                    commandCallTimeout: 5 minutes
+                    uri: "{$.artifact-url}"
+                    path: "/"
+                    context-attrs:
+                      path: "/"
+                    context-nodes:
+                      - Resource:
+                          name: "jdbc/datasource"
+                          auth: "Container"
+                          type: "{$.con.db-dstype}"
+                          maxActive: "8"
+                          maxIdle: "8"
+                          maxWait: "-1"
+                          username: "{$.con.db-user}"
+                          password: "{$.con.db-user-password}"
+                          driverClassName: "{$.con.db-driver}"
+                          url: "{$.con.connection-url}"
+                          validationQuery: "{$.con.validation-query}"
+                          testOnReturn: "true"
+                          testWhileIdle: "true"
+              - loadBalancerAlter:
+                  action: haproxy.reconfigure-servers
+                  precedingPhases: [ deployWar ]
+                  parameters:
+                    commandCallTimeout: 5 minutes
+                    app-hosts: "{$.props.tomcat.app-hosts}"
+                    app-port: "{$.props.tomcat.app-port}"
+                    lb-bucket: "http://roundrobin:80/"
+                  output:
+                    result-lb: entry-url
+            return:
+              entry-url:
+                value: "{$.result-lb}"
+
+          update: *launch
+
+    Database:
+      type: reference.Submodule
+      configuration:
+        __locator.application-id: "Database"
+      interfaces:
+        mysql:
+          schema:
+              type: receive-command(string db-user, string db-user-password, list<string> db-user-privileges => object connection)
+              name: Manage schema
+          file-query:
+              type: receive-command(list<string> sql-url, object connection)
+              name: Run a SQL query
+          dbms:
+              type: publish-signal(object)
+              name: Database parameters
+
+    AppServer:
+      type: reference.Submodule
+      configuration:
+        __locator.application-id: "Application Server"
+      interfaces:
+        tomcat:
+          deploy-libs:
+              type: receive-command(list<string> lib-uri)
+              name: Deploy libs
+          deploy-war:
+              type: receive-command(string uri, string path, object context-attrs, object context-nodes)
+              name: Deploy a war/jar
+          app-hosts:
+              type: publish-signal(list<string>)
+              name: Application hosts
+          app-port:
+              type: publish-signal(int)
+              name: Application port
+
+    LoadBalancer:
+      type: reference.Submodule
+      configuration:
+        __locator.application-id: "Load Balancer"
+      interfaces:
+        haproxy:
+          reconfigure-servers:
+              type: receive-command(list<string> app-hosts, int app-port, string lb-bucket => string entry-url)
+              name: Reconfigure servers
+          lb-stats:
+              type: publish-signal(object)
+              name: HAProxy statistics
+

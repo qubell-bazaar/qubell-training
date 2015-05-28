@@ -1,0 +1,121 @@
+application:
+  configuration:
+    input.quantity: 1
+    input.image: { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+    input.image-size: "m1.small"
+    input.recipe-url: "https://s3.amazonaws.com/qubell-starter-kit-artifacts/qubell-bazaar/component-tomcat-dev-cookbooks-stable-385644c.tar.gz" ### Chef cookbooks url
+  interfaces:
+    input: ###Input values we want to manage from the root application
+      quantity: "bind(workflow#input.quantity)"
+      image: "bind(workflow#input.image)"
+      image-size: "bind(workflow#input.image-size)"
+      recipe-url: "bind(workflow#input.recipe-url)"
+    tomcat:
+      deploy-libs: "bind(workflow#actions.deploy-libs)"
+      deploy-war: "bind(workflow#actions.deploy-war)"
+      app-hosts: "bind(workflow#result.app-hosts)"
+      app-port: "bind(workflow#result.app-port)"
+
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        input:
+          image:
+             type: configuration(map<string, string>)
+             name: Compatible AMI
+             suggestions: # Create dropdown menu in advanced launch
+                 "amazon": { ami: "us-east-1/ami-1ba18d72", user: ec2-user }
+          image-size:
+             type: configuration(string)
+             name: Image size
+          app-port:
+             type: configuration(int)
+             name: Tomcat listen port
+          quantity:
+             type: configuration(int)
+             name: Number of application hosts
+          recipe-url:
+             type: configuration(string)
+             name: Cookbooks URL
+        actions:
+          deploy-libs:
+             type: receive-command(list<string> lib-uri)
+             name: Deploy libs
+          deploy-war:
+             type: receive-command(string uri, string path, object context-attrs, object context-nodes)
+             name: Deploy war/jar
+        result:
+          app-hosts:
+             type: publish-signal(list<string>)
+             name: Application hosts
+          app-port:
+             type: publish-signal(int)
+             name: Application port
+
+      configuration:
+        input.app-port: 8080
+        configuration.triggers:
+          input.quantity: update
+        configuration.propagateStatus: [ update ]
+        configuration.workflows:
+          launch: &launch
+            steps:
+              - provision:
+                  action: provisionVms
+                  parameters:
+                    roleName: default
+                    hardwareId: "{$.image-size}"
+                    imageId: "{$.image.ami}"
+                    vmIdentity: "{$.image.user}"
+                    targetQuantity: "{$.quantity}"
+                    retryCount: 2
+                  output:
+                    app-ips: ips
+              - install:
+                  action: chefsolo
+                  precedingPhases: [ provision ]
+                  parameters:
+                    retryCount: 2
+                    roles: [ default ]
+                    runList: [ "recipe[cookbook-qubell-tomcat]" ]
+                    recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      tomcat:
+                        port: "{$.app-port}"
+            return:
+              app-hosts:
+                value: "{$.app-ips}"
+              app-port:
+                value: "{$.app-port}"
+
+          update: *launch
+
+          deploy-libs:
+            steps:
+              - deployLibs:
+                  action: chefsolo
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[cookbook-qubell-tomcat::deploy_libs]" ]
+                    recipeUrl: "{$.recipe-url}" 
+                    jattrs:
+                      cookbook-qubell-tomcat:
+                        lib_uri: "{$.lib-uri}"
+
+          deploy-war:
+            steps:
+              - deployWar:
+                  action: chefsolo
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[cookbook-qubell-tomcat::deploy_war]" ]
+                    recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      cookbook-qubell-tomcat:
+                        war:
+                          uri: "{$.uri}"
+                          path: "{$.path}"
+                        context:
+                          context_attrs: "{$.context-attrs}"
+                          context_nodes: "{$.context-nodes}"
