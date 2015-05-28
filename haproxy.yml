@@ -1,0 +1,107 @@
+application:
+  configuration:
+    input.image: { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+    input.stats-pass: pa55w0rd
+    input.image-size: "m1.small"
+    input.recipe-url: "https://s3.amazonaws.com/qubell-starter-kit-artifacts/qubell-bazaar/component-haproxy-cookbooks-training.tar.gz"
+  interfaces:
+    input:
+      image: "bind(workflow#input.image)"
+      image-size: "bind(workflow#input.image-size)"
+      recipe-url: "bind(workflow#input.recipe-url)"
+      stats-pass: "bind(workflow#input.stats-pass)"
+    haproxy:
+      reconfigure-servers: "bind(workflow#actions.reconfigure-servers)"
+      lb-stats: "bind(workflow#result.lb-stats)"
+
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        input:
+          image:
+             type: configuration(map<string,object>)
+             name: Compatible AMI
+             suggestions:
+                 "amazon": { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+          image-size:
+             type: configuration(string)
+             name: Image size
+          stats-user:
+             type: configuration(string)
+             name: HAProxy stats user
+          stats-pass:
+             type: configuration(string)
+             name: Haproxy stats password
+          stats-port:
+             type: configuration(int)
+             name: Haproxy stats port
+          stats-url:
+             type: configuration(string)
+             name: Haproxy stats
+          recipe-url:
+             type: configuration(string)
+             name: Chef cookbooks
+        actions:
+          reconfigure-servers:
+             type: receive-command(list<string> app-hosts, int app-port, string lb-bucket => string entry-url)
+             name: Reconfigure servers
+        result:
+          lb-stats:
+             type: publish-signal(object)
+             name: HAProxy stats
+
+      configuration:
+        input.stats-user: admin
+        input.stats-port: 1926
+        input.stats-url: /admin?stats
+        configuration.workflows:
+          launch:
+            steps:
+              - provision:
+                  action: provisionVms
+                  parameters:
+                    roleName: default
+                    hardwareId: "{$.image-size}"
+                    imageId: "{$.image.ami}"
+                    vmIdentity: "{$.image.user}"
+                    targetQuantity: 1
+                  output:
+                    lb-host: ips
+              - lb-install:
+                  action: chefsolo
+                  precedingPhases: [ provision ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[haproxy]" ]
+                    recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      haproxy:
+                        stats_user: "{$.stats-user}"
+                        stats_pass: "{$.stats-pass}"
+                        stats_port: "{$.stats-port}"
+                        stats_url: "{$.stats-url}"
+            return:
+              lb-stats:
+                value:
+                  lb-host: "{$.lb-host[0]}"
+                  lb-statistics-url: "http://{$.lb-host}:{$.stats-port}{$.stats-url}"
+                  stats-user: "{$.stats-user}"
+                  stats-pass: "{$.stats-pass}"
+
+          reconfigure-servers:
+            steps:
+              - reconfigure-servers:
+                  action: chefsolo
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[haproxy::reconfigure]" ]
+                    recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      haproxy:
+                        server: "{$.app-hosts}"
+                        port: "{$.app-port}"
+                        bucket: "{$.lb-bucket}"
+            return:
+              entry-url:
+                value: "http://{$.lb-stats.lb-host}"
