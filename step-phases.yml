@@ -1,0 +1,73 @@
+application:
+  interfaces:
+    result:
+     "*": "bind(workflow#result.*)"
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        result:
+          log: publish-signal(string)
+
+      configuration:
+        configuration.workflows:  
+          launch:
+            steps:
+              provision:
+                action: provisionVms
+                parameters:
+                  hardwareId: "m1.small"
+                  imageId:    "us-east-1/ami-1ba18d72"
+                  vmIdentity: "ec2-user"
+                  roleName: default
+              cpu-intensive-step:
+                action: execrun
+                precedingPhases: [ provision ]
+                parameters:
+                  roles: [ default ]
+                  command:
+                    - |
+                        echo `date`": CPU-intensive step started" >> workflow.log
+                        sleep 10
+                        echo `date`": CPU-intensive step finished" >> workflow.log
+              net-intensive-step:
+                action: execrun
+                precedingPhases: [ provision ]
+                parameters:
+                  roles: [ default ]
+                  command:
+                    - |
+                        echo `date`": Network-intensive step started" >> workflow.log
+                        sleep 10
+                        echo `date`": Network-intensive step finished" >> workflow.log
+              mem-intensive-step:
+                action: execrun
+                precedingPhases: [ provision ]
+                parameters:
+                  roles: [ default ]
+                  command:
+                    - |
+                        echo `date`": Memory-intensive step started" >> workflow.log
+                        sleep 10
+                        echo `date`": Memory-intensive step finished" >> workflow.log
+              step-with-dependency:
+                action: execrun
+                precedingPhases: [ cpu-intensive-step ]
+                parameters:
+                  roles: [ default ]
+                  command:
+                    - |
+                        echo `date`": Step with dependency started" >> workflow.log
+                        sleep 10
+                        echo `date`": Step with dependency finished" >> workflow.log
+              get-log:
+                action: execrun
+                precedingPhases: [ cpu-intensive-step, net-intensive-step, mem-intensive-step, step-with-dependency ]
+                parameters:
+                  roles: [ default ]
+                  command:
+                    - cat workflow.log
+                output:
+                  stdout: stdout
+            return:
+              log: { value: "{$.stdout.*[0]}" } 
