@@ -1,0 +1,75 @@
+application:
+  configuration:
+    input.image: { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+    input.image-size: "m1.small"
+    input.recipe-url: "http://qubell-starter-kit-artifacts.s3.amazonaws.com/qubell-bazaar/component-mysql-dev-cookbooks-training.tar.gz"
+  interfaces: 
+    input:
+      image: "bind(workflow#input.image)"
+      image-size: "bind(workflow#input.image-size)"
+      recipe-url: "bind(workflow#input.recipe-url)"
+    mysql:
+      db-host: "bind(workflow#result.db-host)"
+      dbms: "bind(workflow#result.dbms)"
+
+  components:
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        input:
+          image:
+            type: configuration(map<string, string>)
+            name: Compatible AMI
+            suggestions:
+              "amazon": { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+          image-size:
+             type: configuration(string)
+             name: Image size
+          recipe-url:
+             type: configuration(string)
+             name: Cookbooks URL
+        result:
+          dbms:
+             type: publish-signal(object)
+             name: Database parameters
+          db-host:
+             type: publish-signal(string)
+             name: Database host 
+
+      configuration:
+        configuration.workflows:  
+          launch:
+            steps:
+              - provision-vm:
+                  action: provisionVms
+                  parameters:
+                    hardwareId: "{$.image-size}"
+                    imageId: "{$.image.ami}"
+                    vmIdentity: "{$.image.user}"
+                    roleName: default
+                  output:
+                    db-ips: ips
+              - install-mysql-db:
+                  action: chefsolo
+                  precedingPhases: [ provision-vm ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[mysql_component]" ]
+                    recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      mysql:
+                        port: 3306
+                  output:
+                    chefAttrs: chefState
+            return:
+              db-host:
+                value: "{$.db-ips[0]}"
+              dbms:
+                value:
+                   db-admin-uri: "mysql://root:{$.chefAttrs.*[0].mysql.server_root_password}@{$.db-ips[0]}:{$.chefAttrs.*[0].mysql.port}"
+                   db-type: "mysql"
+                   db-root-user: "root"
+                   db-root-password: "{$.chefAttrs.*[0].mysql.server_root_password}"
+                   db-host: "{$.db-ips[0]}"
+                   db-port: "{$.chefAttrs.*[0].mysql.port}"
+                   db-driver: "com.mysql.jdbc.Driver"
