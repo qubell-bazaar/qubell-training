@@ -14,9 +14,9 @@ application:
       db-host: "bind(workflow#result.db-host)"
       dbms: "bind(workflow#result.dbms)"
   bindings:
-    - [ workflow, properties ]
+    - [ workflow, cookbook ]
   components:
-    properties:
+    cookbook:
       type: reference.Service
       interfaces:
         env:
@@ -44,7 +44,7 @@ application:
           file-query:
              type: receive-command(object connection, list<string> sql-url)
              name: Run an SQL query
-        props:
+        cookbook:
           mysql-cookbook-url: consume-signal(string)
         result:
           dbms:
@@ -53,18 +53,18 @@ application:
           db-host:
              type: publish-signal(string)
              name: Database host 
-      required: [ props ]
+      required: [ cookbook ]
       configuration:
         configuration.workflows:  
           launch:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - provision-vm:
                   action: provisionVms
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     hardwareId: "{$.image-size}"
                     imageId: "{$.image.ami}"
@@ -78,7 +78,7 @@ application:
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
@@ -100,17 +100,17 @@ application:
 
           schema-management:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - create-db:
                   action: chefsolo
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::db_manage]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
@@ -126,7 +126,7 @@ application:
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::user_manage]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
@@ -157,17 +157,17 @@ application:
 
           file-query:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - run-file-query:
                   action: chefsolo
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::file_query]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
