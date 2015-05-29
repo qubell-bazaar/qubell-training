@@ -1,0 +1,205 @@
+application:
+  configuration:
+    input.image: { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+    input.image-size: "m1.small"
+    #input.recipe-url: "http://qubell-starter-kit-artifacts.s3.amazonaws.com/qubell-bazaar/component-mysql-dev-cookbooks-training.tar.gz"
+  interfaces: 
+    input:
+      image: "bind(workflow#input.image)"
+      image-size: "bind(workflow#input.image-size)"
+      #recipe-url: "bind(workflow#input.recipe-url)"
+    mysql:
+      schema: "bind(workflow#actions.schema-management)"
+      file-query: "bind(workflow#actions.file-query)"
+      db-host: "bind(workflow#result.db-host)"
+      dbms: "bind(workflow#result.dbms)"
+      last-backup: "bind(workflow#result.last-backup)"
+  bindings:
+    - [ workflow, properties ]
+  components:
+    properties:
+      type: reference.Service
+      interfaces:
+        env:
+          mysql-cookbook-url: publish-signal(string)
+          
+    workflow:
+      type: workflow.Instance
+      interfaces:
+        input:
+          image:
+            type: configuration(map<string, string>)
+            name: Compatible AMI
+            suggestions:
+              "amazon": { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
+          image-size:
+             type: configuration(string)
+             name: Image size
+          #recipe-url:
+          #   type: configuration(string)
+          #   name: Cookbooks URL
+        actions:
+          schema-management:
+             type: receive-command(string db-user, string db-user-password, list<string> db-user-privileges => object connection)
+             name: Manage schema
+          file-query:
+             type: receive-command(object connection, list<string> sql-url)
+             name: Run an SQL query
+        props:
+          mysql-cookbook-url: consume-signal(string)
+        result:
+          dbms:
+             type: publish-signal(object)
+             name: Database parameters
+          db-host:
+             type: publish-signal(string)
+             name: Database host
+          last-backup:
+              type: publish-signal(string)
+              name: Latest database backup
+      required: [ props ]
+      configuration:
+        configuration.schedule:
+          backup: "0 0/5 * * * ? *" # run every 5 minutes
+        configuration.workflows:  
+          launch:
+            steps:
+              - getSignals:
+                  action: getSignals
+                  output:
+                    env: result
+              - provision-vm:
+                  action: provisionVms
+                  precedingPhases: [ getSignals ]
+                  parameters:
+                    hardwareId: "{$.image-size}"
+                    imageId: "{$.image.ami}"
+                    vmIdentity: "{$.image.user}"
+                    roleName: default
+                  output:
+                    db-ips: ips
+              - install-mysql-db:
+                  action: chefsolo
+                  precedingPhases: [ provision-vm ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[mysql_component]" ]
+                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    #recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      mysql:
+                        port: 3306
+                  output:
+                    chefAttrs: chefState
+            return:
+              db-host:
+                value: "{$.db-ips[0]}"
+              dbms:
+                value:
+                   db-admin-uri: "mysql://root:{$.chefAttrs.*[0].mysql.server_root_password}@{$.db-ips[0]}:{$.chefAttrs.*[0].mysql.port}"
+                   db-type: "mysql"
+                   db-root-user: "root"
+                   db-root-password: "{$.chefAttrs.*[0].mysql.server_root_password}"
+                   db-host: "{$.db-ips[0]}"
+                   db-port: "{$.chefAttrs.*[0].mysql.port}"
+                   db-driver: "com.mysql.jdbc.Driver"
+              last-backup:
+                value: "Never"
+
+          schema-management:
+            steps:
+              - getSignals:
+                  action: getSignals
+                  output:
+                    env: result
+              - create-db:
+                  action: chefsolo
+                  precedingPhases: [ getSignals ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[mysql_component::db_manage]" ]
+                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    #recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      mysql:
+                        server_root_password: "{$.dbms.db-root-password}"
+                        port: "{$.dbms.db-port}"
+                      mysql_component:
+                        schema:
+                          dbname: "{$.db-user}"
+                          db_action: "create"
+              - create-user:
+                  action: chefsolo
+                  precedingPhases: [ create-db ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[mysql_component::user_manage]" ]
+                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    #recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      mysql:
+                        server_root_password: "{$.dbms.db-root-password}"
+                        db-port: "{$.dbms.db-port}"
+                      mysql_component:
+                        schema:
+                          dbname: "{$.db-user}"
+                          username: "{$.db-user}"
+                          password: "{$.db-user-password}"
+                          privileges: "{$.db-user-privileges}"
+                          action: "grant"
+                        hosts: [ "%" ]
+            return:
+              connection:
+                value:
+                  db-user-uri: "mysql://{$.db-user}:{$.db-user-password}@{$.dbms.db-host}:{$.dbms.db-port}/{$.db-user}"
+                  db-type: "mysql"
+                  db-name: "{$.db-user}"
+                  db-user: "{$.db-user}"
+                  db-user-password: "{$.db-user-password}"
+                  db-host: "{$.dbms.db-host}"
+                  db-port: "{$.dbms.db-port}"
+                  db-driver: "com.mysql.jdbc.Driver"
+                  db-dstype: "javax.sql.DataSource"
+                  connection-url: "jdbc:mysql://{$.dbms.db-host}:{$.dbms.db-port}/{$.db-user}?autoReconnect=true"
+                  validation-query: "select 1"
+
+          file-query:
+            steps:
+              - getSignals:
+                  action: getSignals
+                  output:
+                    env: result
+              - run-file-query:
+                  action: chefsolo
+                  precedingPhases: [ getSignals ]
+                  parameters:
+                    roles: [ default ]
+                    runList: [ "recipe[mysql_component::file_query]" ]
+                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    #recipeUrl: "{$.recipe-url}"
+                    jattrs:
+                      mysql:
+                        db-port: "{$.dbms.db-port}"
+                      mysql_component:
+                        schema:
+                          dbname: "{$.connection.db-name}"
+                          username: "{$.connection.db-user}"
+                          password: "{$.connection.db-user-password}"
+                        sql_url: "{$.sql-url}"
+                        
+          backup:
+            steps:
+              - backup:
+                  action: execrun
+                  parameters:
+                    roles: [ default ]
+                    command:
+                      - |
+                        TMPFILE=/tmp/mysql-backup.tar.gz
+                        mysql -A -u{$.dbms.db-root-user} -p{$.dbms.db-root-password} | gzip > $$TMPFILE
+                        echo "$$(date +%F.%H:%M:%S) $$TMPFILE"
+                  output:
+                    stdout: stdout
+            return:
+              last-backup:
+                value: "{$.stdout.*[0]}"
