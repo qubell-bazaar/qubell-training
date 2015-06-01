@@ -10,6 +10,20 @@ kit:
       manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/tomcat.yml
     - name: "Load Balancer"
       manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/haproxy.yml
+    - name: "Cookbook Provider"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/cookbook-url-service.yml
+    - name: "Hello World"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/hello-world.yml
+    - name: "Hello World (static)"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/hello-static.yml
+    - name: "Database (external cookbook)"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/mysql_env.yml
+    - name: "Database (external cookbook, cron)"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/mysql_env_cron.yml
+    - name: "Database (simple)"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/mysql_simple.yml
+    - name: "Step Phases Example"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/step-phases.yml
   provider:
     name: "Qubell"
     link: "http://qubell.com/"
