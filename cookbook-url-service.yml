@@ -1,6 +1,6 @@
 application:
   configuration:
-    configuration.url: "https://s3.amazonaws.com/qubell-starter-kit-artifacts/qubell-bazaar/component-mysql-dev-cookbooks-stable-599d152.tar.gz"
+    configuration.url: "http://qubell-starter-kit-artifacts.s3.amazonaws.com/qubell-bazaar/component-mysql-dev-cookbooks-training.tar.gz"
   interfaces:
     cookbook:
       mysql-cookbook-url: bind(cookbook#connection.url)
