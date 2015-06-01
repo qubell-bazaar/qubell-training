@@ -3,16 +3,15 @@ kit:
   link: "http://github.com/qubell-bazaar/training/"
   applications:
     - name: "PetClinic"
-      manifest: https://raw.github.com/qubell-bazaar/training/master/petclinic.yml
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/petclinic.yml
     - name: "Database"
-      manifest: https://raw.github.com/qubell-bazaar/training/master/mysql.yml
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/mysql.yml
     - name: "Application Server"
-      manifest: https://raw.github.com/qubell-bazaar/training/master/tomcat.yml
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/tomcat.yml
     - name: "Load Balancer"
-      manifest: https://raw.github.com/qubell-bazaar/training/master/haproxy.yml
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/haproxy.yml
   provider:
-    name: ""
-    link: ""
+    name: "Qubell"
+    link: "http://qubell.com/"
   documentation:
-    overview: ""
-
+    overview: "Training manifests"
