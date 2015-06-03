@@ -1,0 +1,42 @@
+application:
+  interfaces:
+    resource:
+      "*": "bind(consumer#result.*)"
+  components:
+    resource-pool:
+      type: reference.Service
+      interfaces:
+        resource-pool:
+          allocate-resources:  receive-command(string type, int count => list<object> resources)
+          release-resources:   receive-command(string type, list<object> resources)
+    consumer:
+      type: workflow.Instance
+      interfaces:
+        resource-pool:
+          allocate-resources:  send-command(string type, int count => list<object> resources)
+          release-resources:   send-command(string type, list<object> resources)
+        result:
+          resource: publish-signal(object)
+      required: [ resource-pool ]
+      configuration:
+        configuration.workflows:
+          launch:
+            steps:
+              allocate:
+                action: resource-pool.allocate-resources
+                parameters:
+                  type: vm
+                  count: 1
+                output:
+                  allocated: resources
+            return:
+              resource: { value: "{$.allocated[0]}" }
+          destroy:
+            steps:
+              release:
+                action: resource-pool.release-resources
+                parameters:
+                  type: vm
+                  resources: [ "{$.resource}" ]
+  bindings:
+    - [ consumer#resource-pool, resource-pool ]
