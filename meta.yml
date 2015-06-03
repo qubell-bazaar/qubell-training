@@ -24,6 +24,8 @@ kit:
       manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/mysql_simple.yml
     - name: "Step Phases Example"
       manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/step-phases.yml
+    - name: "Pool Consumer"
+      manifest: https://raw.githubusercontent.com/qubell-bazaar/training/master/pool-consumer.yml
   provider:
     name: "Qubell"
     link: "http://qubell.com/"
