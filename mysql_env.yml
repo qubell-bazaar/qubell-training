@@ -12,12 +12,12 @@ application:
       db-host: "bind(workflow#result.db-host)"
       dbms: "bind(workflow#result.dbms)"
   bindings:
-    - [ workflow, cookbook ]
+    - [ workflow#cookbook, cookbook ]
   components:
     cookbook:
       type: reference.Service
       interfaces:
-        env:
+        cookbook:
           mysql-cookbook-url: publish-signal(string)
 
     workflow:

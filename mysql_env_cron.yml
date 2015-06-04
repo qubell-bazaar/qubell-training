@@ -13,12 +13,12 @@ application:
       dbms: "bind(workflow#result.dbms)"
       last-backup: "bind(workflow#result.last-backup)"
   bindings:
-    - [ workflow, properties ]
+    - [ workflow#cookbook, cookbook ]
   components:
-    properties:
+    cookbook:
       type: reference.Service
       interfaces:
-        env:
+        cookbook:
           mysql-cookbook-url: publish-signal(string)
 
     workflow:
@@ -40,7 +40,7 @@ application:
           file-query:
              type: receive-command(object connection, list<string> sql-url)
              name: Run an SQL query
-        props:
+        cookbook:
           mysql-cookbook-url: consume-signal(string)
         result:
           dbms:
@@ -52,20 +52,20 @@ application:
           last-backup:
               type: publish-signal(string)
               name: Latest database backup
-      required: [ props ]
+      required: [ cookbook ]
       configuration:
         configuration.schedule:
           backup: "0 0/5 * * * ? *" # run every 5 minutes
         configuration.workflows:
           launch:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - provision-vm:
                   action: provisionVms
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     hardwareId: "{$.image-size}"
                     imageId: "{$.image.ami}"
@@ -79,7 +79,7 @@ application:
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     jattrs:
                       mysql:
                         port: 3306
@@ -102,17 +102,17 @@ application:
 
           schema-management:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - create-db:
                   action: chefsolo
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::db_manage]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     jattrs:
                       mysql:
                         server_root_password: "{$.dbms.db-root-password}"
@@ -127,7 +127,7 @@ application:
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::user_manage]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     jattrs:
                       mysql:
                         server_root_password: "{$.dbms.db-root-password}"
@@ -157,17 +157,17 @@ application:
 
           file-query:
             steps:
-              - getSignals:
+              - get-signals:
                   action: getSignals
                   output:
-                    env: result
+                    signals: result
               - run-file-query:
                   action: chefsolo
-                  precedingPhases: [ getSignals ]
+                  precedingPhases: [ get-signals ]
                   parameters:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::file_query]" ]
-                    recipeUrl: "{$.env.props.mysql-cookbook-url}"
+                    recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
                     jattrs:
                       mysql:
                         db-port: "{$.dbms.db-port}"
