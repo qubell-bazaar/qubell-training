@@ -2,12 +2,10 @@ application:
   configuration:
     input.image: { ami: "us-east-1/ami-1ba18d72", user: "ec2-user" }
     input.image-size: "m1.small"
-    #input.recipe-url: "http://qubell-starter-kit-artifacts.s3.amazonaws.com/qubell-bazaar/component-mysql-dev-cookbooks-training.tar.gz"
-  interfaces: 
+  interfaces:
     input:
       image: "bind(workflow#input.image)"
       image-size: "bind(workflow#input.image-size)"
-      #recipe-url: "bind(workflow#input.recipe-url)"
     mysql:
       schema: "bind(workflow#actions.schema-management)"
       file-query: "bind(workflow#actions.file-query)"
@@ -21,7 +19,7 @@ application:
       interfaces:
         env:
           mysql-cookbook-url: publish-signal(string)
-          
+
     workflow:
       type: workflow.Instance
       interfaces:
@@ -34,9 +32,6 @@ application:
           image-size:
              type: configuration(string)
              name: Image size
-          #recipe-url:
-          #   type: configuration(string)
-          #   name: Cookbooks URL
         actions:
           schema-management:
              type: receive-command(string db-user, string db-user-password, list<string> db-user-privileges => object connection)
@@ -52,10 +47,10 @@ application:
              name: Database parameters
           db-host:
              type: publish-signal(string)
-             name: Database host 
+             name: Database host
       required: [ cookbook ]
       configuration:
-        configuration.workflows:  
+        configuration.workflows:
           launch:
             steps:
               - get-signals:
@@ -79,7 +74,6 @@ application:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component]" ]
                     recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
-                    #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
                         port: 3306
@@ -111,7 +105,6 @@ application:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::db_manage]" ]
                     recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
-                    #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
                         server_root_password: "{$.dbms.db-root-password}"
@@ -127,7 +120,6 @@ application:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::user_manage]" ]
                     recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
-                    #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
                         server_root_password: "{$.dbms.db-root-password}"
@@ -168,7 +160,6 @@ application:
                     roles: [ default ]
                     runList: [ "recipe[mysql_component::file_query]" ]
                     recipeUrl: "{$.signals.cookbook.mysql-cookbook-url}"
-                    #recipeUrl: "{$.recipe-url}"
                     jattrs:
                       mysql:
                         db-port: "{$.dbms.db-port}"
