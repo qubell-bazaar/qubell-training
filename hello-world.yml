@@ -1,5 +1,6 @@
 application:
   components:
+    # workflow is not a reseverd word, it is a user-defied component name inside the root composite
     workflow:
       type: workflow.Instance
       interfaces:
@@ -11,7 +12,10 @@ application:
             steps:
               - provision:
                   action: provisionVms
-                  parameters:
+                  # by default steps are associated a phase named after them
+                  # to put more than one step into a single phase, specify it explicitly like this:
+                  # phase: provision
+		  parameters:
                     hardwareId: "m1.medium"
                     imageId: "us-east-1/ami-1ba18d72"
                     vmIdentity: ec2-user
